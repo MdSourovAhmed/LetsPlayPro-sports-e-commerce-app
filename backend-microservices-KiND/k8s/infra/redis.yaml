@@ -1,0 +1,43 @@
+# Using a plain Deployment (not a StatefulSet) for infra pieces here — the more "correct"
+# pattern for anything stateful is a StatefulSet with a stable network identity and a
+# PersistentVolumeClaim per replica, but with a single replica (which is all local kind/
+# minikube practice needs) a Deployment + PVC behaves the same and is simpler to read while
+# learning. Worth switching to StatefulSets if you ever run more than one replica of any of
+# these — Redis/RabbitMQ/Mongo clustering all assume stable pod identities.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: letsplaypro
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: redis }
+  template:
+    metadata:
+      labels: { app: redis }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports: [{ containerPort: 6379 }]
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "300m", memory: "256Mi" }
+            limits: { cpu: "1000m", memory: "1Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: letsplaypro
+spec:
+  selector: { app: redis }
+  ports: [{ port: 6379, targetPort: 6379 }]

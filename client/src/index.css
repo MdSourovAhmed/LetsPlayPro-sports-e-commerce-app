@@ -1,26 +1,87 @@
-@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap");
+@import "tailwindcss";
 
-* {
-  font-family: "Outfit", sans-serif;
+@theme {
+  --font-display: "Prata", serif;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #171717;
+  --color-ink-soft: #52525b;
+  --color-paper: #ffffff;
+  --color-paper-dim: #fafafa;
+  --color-line: #e5e5e5;
+  --color-accent: #f0b429; /* signature amber bar, matches reference screenshots */
+  --color-accent-dark: #b45309;
+
+  --color-danger: #dc2626;
+  --color-success: #16a34a;
 }
 
-.prata-regular {
-  font-family: "Prata", serif;
-  font-weight: 400;
-  font-style: normal;
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+    font-feature-settings: "ss01" 1;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-accent);
+    color: var(--color-ink);
+  }
 }
 
-a.active hr {
-  display: block;
+@layer components {
+  /* The "— EYEBROW" label pattern seen throughout the reference designs */
+  .eyebrow {
+    @apply flex items-center gap-2 text-xs font-medium tracking-[0.2em] uppercase text-ink-soft;
+  }
+  .eyebrow::before {
+    content: "";
+    @apply block h-px w-6 bg-ink-soft;
+  }
+
+  .accent-bar {
+    @apply inline-block h-4 w-1 rounded-full bg-accent;
+  }
+
+  .container-page {
+    @apply mx-auto w-full max-w-[1440px] px-5 sm:px-8 lg:px-12;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-ink px-8 py-3.5 text-sm font-medium tracking-wide text-white transition-colors duration-200 hover:bg-ink/85 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 border border-ink bg-transparent px-8 py-3.5 text-sm font-medium tracking-wide text-ink transition-colors duration-200 hover:bg-ink hover:text-white disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 text-sm font-medium text-ink-soft transition-colors hover:text-ink;
+  }
+
+  .input-field {
+    @apply w-full border border-line bg-paper px-4 py-3 text-sm text-ink placeholder:text-ink-soft/60 transition-colors focus:border-ink;
+  }
+
+  .skeleton {
+    @apply animate-pulse bg-neutral-200;
+  }
 }
 
-::-webkit-scrollbar {
-  display: none;
-}
-
-@media (max-width: 640px) {
-  a.active {
-    background-color: black;
-    color: white;
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
   }
 }

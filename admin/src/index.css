@@ -1,10 +1,90 @@
-.active{
-    background-color: #ffebf5;
-    border-color: #c586A5;
+@import "tailwindcss";
+
+/* Tailwind v4 is CSS-first: dark mode no longer reads a `darkMode: 'class'`
+   key from a JS config (there is no JS config). Without this line, `dark:`
+   utilities silently fall back to `prefers-color-scheme` and the manual
+   theme toggle in useUIStore would have no visible effect at all. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Base surfaces — deliberately not pure black/white */
+  --color-surface: #FAFAF9;
+  --color-surface-dark: #0F1115;
+
+  --color-panel: #FFFFFF;
+  --color-panel-dark: #16191F;
+
+  --color-border: #E7E5E1;
+  --color-border-dark: #262A33;
+
+  --color-ink: #1A1B1E;
+  --color-ink-dark: #EDEDEF;
+
+  --color-muted: #6B6F76;
+  --color-muted-dark: #8B8F99;
+
+  /* Brand accent — desaturated indigo, not Tailwind's default blue */
+  --color-brand-50: #F1F1FE;
+  --color-brand-100: #E3E4FD;
+  --color-brand-400: #7A7EF2;
+  --color-brand-500: #5B5FEF;
+  --color-brand-600: #4548D6;
+  --color-brand-700: #3739B0;
+
+  /* Amber reserved exclusively for "needs attention" states — never used
+     decoratively, so color alone always signals something actionable */
+  --color-attention-50: #FDF6EC;
+  --color-attention-100: #FBEAD2;
+  --color-attention-500: #E8A33D;
+  --color-attention-600: #C9842A;
+
+  --color-success-50: #EDFAF3;
+  --color-success-500: #3FB67F;
+  --color-success-600: #2F9A68;
+
+  --color-danger-50: #FDECEC;
+  --color-danger-500: #E5484D;
+  --color-danger-600: #C8373C;
+
+  --font-display: "Lexend", sans-serif;
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --shadow-panel: 0 1px 2px 0 rgba(20, 20, 25, 0.04), 0 1px 1px 0 rgba(20, 20, 25, 0.03);
 }
 
-select,input,textarea{
-    border: 1px solid #c2c2c2;
-    outline-color: #c585A5;
-    border-radius: 4px;
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    @apply font-sans text-ink dark:text-ink-dark transition-colors duration-200;
+  }
+
+  /* Visible keyboard focus everywhere — accessibility floor, never remove.
+     v4 renamed v3's outline-none (invisible-but-still-present-in-forced-
+     colors-mode) to outline-hidden; the new outline-none actually removes
+     the outline entirely, which would fail forced-colors accessibility. */
+  :focus-visible {
+    @apply outline-hidden ring-2 ring-brand-500 ring-offset-2 ring-offset-surface dark:ring-offset-surface-dark;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-border dark:bg-border-dark rounded-full;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

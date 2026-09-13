@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: letsplaypro
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: auth-service }
+  template:
+    metadata:
+      labels: { app: auth-service }
+      annotations:
+        # k8s.grafana.com/* (not the older prometheus.io/* convention) — this is the actual
+        # default annotation the Grafana Kubernetes Monitoring Helm chart's Annotation
+        # Autodiscovery feature looks for. No ServiceMonitor CRD, no Prometheus Operator
+        # required. See k8s/observability/README.md.
+        k8s.grafana.com/scrape: "true"
+        k8s.grafana.com/metrics.portNumber: "3001"
+        k8s.grafana.com/metrics.path: "/metrics"
+        # Explicit job name so Prometheus's "job" label is exactly "auth-service" — predictable and
+        # stable to query on, rather than whatever the chart would otherwise derive.
+        k8s.grafana.com/job: "auth-service"
+    spec:
+      containers:
+        - name: auth-service
+          image: letsplaypro/auth-service:local
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 3001 }]
+          envFrom:
+            - configMapRef: { name: letsplaypro-config }
+          env:
+            - name: PORT
+              value: "3001"
+            - name: MONGO_URI
+              valueFrom: { configMapKeyRef: { name: letsplaypro-config, key: MONGO_URI_AUTH } }
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: letsplaypro-secrets, key: JWT_SECRET } }
+            - name: GOOGLE_CLIENT_ID
+              valueFrom: { secretKeyRef: { name: letsplaypro-secrets, key: GOOGLE_CLIENT_ID } }
+            - name: CLOUDINARY_CLOUD_NAME
+              valueFrom: { secretKeyRef: { name: letsplaypro-secrets, key: CLOUDINARY_CLOUD_NAME } }
+            - name: CLOUDINARY_API_KEY
+              valueFrom: { secretKeyRef: { name: letsplaypro-secrets, key: CLOUDINARY_API_KEY } }
+            - name: CLOUDINARY_API_SECRET
+              valueFrom: { secretKeyRef: { name: letsplaypro-secrets, key: CLOUDINARY_API_SECRET } }
+          readinessProbe:
+            httpGet: { path: /health, port: 3001 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 3001 }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: letsplaypro
+spec:
+  selector: { app: auth-service }
+  ports: [{ port: 3001, targetPort: 3001 }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: auth-service
+  namespace: letsplaypro
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: auth-service
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
