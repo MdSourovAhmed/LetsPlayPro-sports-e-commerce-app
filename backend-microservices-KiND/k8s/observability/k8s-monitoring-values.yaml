@@ -1,0 +1,121 @@
+# Helm values for the `grafana/k8s-monitoring` chart — this is what Grafana Cloud's own
+# "Connections → Kubernetes" onboarding wizard generates you a starting point for, deploying
+# Grafana Alloy configured to scrape this cluster and ship everything to your Grafana Cloud
+# stack. No self-hosted Prometheus or Grafana needed — Grafana Cloud IS the storage and the
+# UI, you just view it at your stack's URL instead of port-forwarding to anything local.
+#
+# ⚠️ This chart's schema moves fast — it went from map-based `destinations`, to list-based,
+# and back to map-based (v4) within the past year, and v3+ added a hard dependency on a
+# separately-installed Alloy Operator CRD. What's below is the current (v4-era) structure as
+# of when this was written. Before installing, verify against what you actually have:
+#
+#   helm repo add grafana https://grafana.github.io/helm-charts && helm repo update
+#   helm show values grafana/k8s-monitoring | less
+#
+# If the shape of `destinations` below doesn't match what that shows you, use their migration
+# tool rather than hand-editing blind: https://grafana.github.io/k8s-monitoring-helm-migrator/
+
+cluster:
+  # Shows up as a label on every metric/log this ships — rename per cluster if you're
+  # running both a kind and a minikube cluster and want to tell their data apart in Grafana.
+  name: letsplaypro-kind
+
+# Where telemetry gets sent. Credentials are NOT embedded here — each destination points at
+# a key inside the grafana-cloud-credentials Secret (see grafana-cloud-secret.example.yaml)
+# instead, via secret.create: false + usernameKey/passwordKey. This is the difference between
+# "safe to commit this file" and "just leaked an API token into git history forever" — don't
+# collapse this back down to inline `username:`/`password:` fields even temporarily to debug.
+destinations:
+  grafana-cloud-metrics:
+    type: prometheus
+    url: https://prometheus-prod-43-prod-ap-south-1.grafana.net/api/prom/push
+    auth:
+      type: basic
+      usernameKey: PROMETHEUS_USERNAME
+      passwordKey: ACCESS_POLICY_TOKEN
+    secret:
+      create: false
+      name: grafana-cloud-credentials
+      namespace: letsplaypro
+  grafana-cloud-logs:
+    type: loki
+    url: https://logs-prod-028.grafana.net/loki/api/v1/push
+    auth:
+      type: basic
+      usernameKey: LOKI_USERNAME
+      passwordKey: ACCESS_POLICY_TOKEN
+    secret:
+      create: false
+      name: grafana-cloud-credentials
+      namespace: letsplaypro
+
+# ─── What actually gets collected ──────────────────────────────────────────────
+
+# Kubelet + cAdvisor + kube-state-metrics — CPU, memory, restart counts, OOMKills, for every
+# pod in the cluster, no exporter needed per-workload. This alone is what gives you baseline
+# health visibility into mongo-*/redis/rabbitmq without writing a single line of exporter
+# config for any of them — you won't get their internal metrics (replication lag, queue
+# depth, connection pool stats), but "is it up, is it being OOMKilled, is it CPU-throttled"
+# is covered.
+# clusterMetrics:
+#   enabled: true
+
+# # Scrapes anything carrying k8s.grafana.com/scrape: "true" — this is how the seven app
+# # services' own /metrics endpoints (added directly to each service, see backend README) get
+# # picked up. Nothing here needs updating when you add an eighth service later; the annotation
+# # on that service's own Deployment is the only thing that needs to exist.
+# annotationAutodiscovery:
+#   enabled: true
+
+# # Ships every pod's stdout/stderr to Loki. Paired with clusterEvents below, this is usually
+# # how you actually find out *why* something is unhealthy, not just *that* it is — a pod stuck
+# # in CrashLoopBackOff shows both its own error logs AND the scheduler's account of what it
+# # tried and when, in the same place, filterable by the same labels the metrics use.
+# podLogsViaLoki:
+#   enabled: true
+
+# # Kubernetes Events (OOMKilled, ImagePullBackOff, failed liveness probes, evictions...) as a
+# # log stream. These often ARE the answer to "why did this restart" — more directly than
+# # grepping application logs for a stack trace that may not even mention the actual cause
+# # (the process didn't choose to die if it was OOMKilled).
+# clusterEvents:
+#   enabled: true
+
+# collectors:
+#   alloy-metrics:
+#     presets: [clustered, statefulset]
+#   alloy-logs:
+#     presets: [daemonset, filesystem-log-reader]
+#   alloy-singleton:
+#     presets: [singleton]
+
+# Features
+clusterMetrics:
+  enabled: true
+  collector: alloy-metrics
+
+annotationAutodiscovery:
+  enabled: true
+  collector: alloy-metrics
+
+podLogsViaLoki:
+  enabled: true
+  collector: alloy-logs
+
+clusterEvents:
+  enabled: true
+  collector: alloy-singleton
+
+# Collectors
+collectors:
+  alloy-metrics:
+    presets: [clustered, statefulset]
+  alloy-logs:
+    presets: [daemonset, filesystem-log-reader]
+  alloy-singleton:
+    presets: [singleton]
+
+# Built-in supporting services
+telemetryServices:
+  kube-state-metrics:
+    deploy: true

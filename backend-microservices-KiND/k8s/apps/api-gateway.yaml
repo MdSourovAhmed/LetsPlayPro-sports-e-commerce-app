@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: letsplaypro
+spec:
+  replicas: 2 # this is the whole reason rateLimitStore.js needed to move to Redis
+  selector:
+    matchLabels: { app: api-gateway }
+  template:
+    metadata:
+      labels: { app: api-gateway }
+      annotations:
+        # k8s.grafana.com/* (not the older prometheus.io/* convention) — this is the actual
+        # default annotation the Grafana Kubernetes Monitoring Helm chart's Annotation
+        # Autodiscovery feature looks for. No ServiceMonitor CRD, no Prometheus Operator
+        # required. See k8s/observability/README.md.
+        k8s.grafana.com/scrape: "true"
+        k8s.grafana.com/metrics.portNumber: "3000"
+        k8s.grafana.com/metrics.path: "/metrics"
+        # Explicit job name so Prometheus's "job" label is exactly "api-gateway" — predictable and
+        # stable to query on, rather than whatever the chart would otherwise derive.
+        k8s.grafana.com/job: "api-gateway"
+    spec:
+      # Without this, the scheduler is free to put both api-gateway replicas on the same
+      # worker node — fine until that one node goes down and you lose 100% of your gateway
+      # capacity at once instead of 50%. `whenUnsatisfiable: DoNotSchedule` makes this a hard
+      # rule rather than a preference: with 3 workers and maxSkew 1, Kubernetes refuses to
+      # place a 3rd replica on a node that already has one until every node has at most 1.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels: { app: api-gateway }
+      containers:
+        - name: api-gateway
+          image: letsplaypro/api-gateway:local # see k8s/README.md for how this gets built/loaded
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 3000 }]
+          envFrom:
+            - configMapRef: { name: letsplaypro-config }
+          env:
+            - name: PORT
+              value: "3000"
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: letsplaypro-secrets, key: JWT_SECRET } }
+          readinessProbe:
+            httpGet: { path: /health, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 3000 }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: letsplaypro
+spec:
+  selector: { app: api-gateway }
+  ports: [{ port: 3000, targetPort: 3000 }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-gateway
+  namespace: letsplaypro
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-gateway
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
